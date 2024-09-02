@@ -136,8 +136,8 @@ const Utils = {
      * @returns {} {team1, team2}
      */
     playMatch: function(team1, team2) {
-        const DISPARITY_FACTOR = 0.55;
-        const DISPARITY_MULTIPLIER = 1 + (Utils.randomRange(-(DISPARITY_FACTOR * 100), (DISPARITY_FACTOR * 100) * 2) / 100);
+        const DISPARITY_FACTOR = 55;
+        const DISPARITY_MULTIPLIER = 1 + (Utils.randomRange(-(DISPARITY_FACTOR), (DISPARITY_FACTOR) * 2) / 100);
 
         const team1Odds = this.winProbability(team1, team2);
         const team2Odds = this.winProbability(team2, team1);
