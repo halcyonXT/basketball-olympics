@@ -5,6 +5,7 @@ const exhibitions = JSON.parse(fs.readFileSync('exibitions.json'));
 
 let allTeams = {};
 
+// indentation used for formatting the terminal output
 const INDENTATION = " ".repeat(4);
 
 const Utils = {
@@ -13,6 +14,10 @@ const Utils = {
 
     clamp: (min, val, max) => Math.max(min, Math.min(max, val)),
 
+    /**
+     * Boundaries for the minimal and maximal score in a single game
+     * @returns 
+     */
     matchPointsRange: function() {
         const MIN = 62;
         const MAX = 144;
@@ -23,77 +28,14 @@ const Utils = {
         }
     },
 
-    breakTies: function(skipSort = false) {
-        //let hasTies = false;
-        for (let key in groups) {
-            let group = groups[key];
-
-            if (!skipSort) {
-                group.sort((a, b) => allTeams[b.ISOCode].stats.points - allTeams[a.ISOCode].stats.points);
-            }
-
-            let tied = null, si = null;
-
-            for (let i = 1, cur = allTeams[group[0].ISOCode].stats.points; i < group.length; i++) {
-                let team = allTeams[group[i].ISOCode];
-
-                if (team.stats.points === cur) {
-                    if (!tied) {
-                        tied = 1;
-                        si = i - 1;
-                    };
-                    tied++;
-                } else {
-                    cur = team.stats.points;
-                }
-            }
-
-            //console.log(tied);
-            if (!tied) continue;
-            hasTies = true;
-
-            if (tied === 2) {
-                let team1 = allTeams[group[2].ISOCode];
-                let headToHead = team1.matches[group[3].ISOCode];
-                //let team2 = allTeams[group[3].ISOCode];
-                if (headToHead.opponent > headToHead.target) {
-                    [group[2], group[3]] = [group[3], group[2]]
-                }
-            } else {
-                let participants = (group.slice(si, si + tied)).map(i => i.ISOCode);
-                let miniLeague = [];
-
-                for (let i in participants) {
-                    miniLeague[i] = [participants[i], 0];
-                }
-
-                for (let i = 0; i < participants.length - 1; i++) {
-                    for (let j = i + 1; j < participants.length; j++) {
-                        let match = allTeams[miniLeague[i][0]]?.matches[miniLeague[j][0]];
-                        let iwin = match?.target > match?.opponent;
-
-                        //console.log(miniLeague[i][0] + " against " + miniLeague[j][0])
-
-                        miniLeague[i][1] += (1 + (+iwin));
-                        miniLeague[j][1] += (1 + (+!iwin));
-                    }
-                }
-
-                miniLeague.sort((a,b) => b[1] - a[1]);
-
-                for (let i = si, j = 0; i < si + 3; i++, j++) {
-                    let ind = group.findIndex(o => o.ISOCode === miniLeague[j][0]);
-                    [group[i], group[ind]] = [group[ind], group[i]];
-                }
-            }
-
-            //console.log(tied)
-        }
-    },
-
+    /**
+     * Returns the fiba probability of winning. Used as a "base" for later probability calculation that includes form and a random factor. Default is 0,.5
+     * @param {String} target - ISOCode of the target team
+     * @param {String} opponent - ISOCode of the opponent team
+     * @returns 
+     */
     fibaDifferenceProbability: function(target, opponent) {
-        
-        let FIBA_DIFFERENCE_DIVISOR = 100;
+        let FIBA_DIFFERENCE_DIVISOR = 105;
 
         if (allTeams[target] && allTeams[opponent]) {
             return 0.5 + ((allTeams[opponent].FIBA - allTeams[target].FIBA) / FIBA_DIFFERENCE_DIVISOR);
@@ -102,23 +44,26 @@ const Utils = {
         return 0.5;
     },
 
+    /**
+     * Uses FIBA diff as a starting point for probability calculation. Includes form of the team gathered through exhibition matches and all other matches played through Utils.playMatch. Also includes a random factor
+     * @param {String} target - ISOCode of the target team
+     * @param {String} opponent - ISOCode of the opponent team
+     * @param {Boolean} includeRandomFactor - Whether to include a random factor or not. Default is true
+     * @returns 
+     */
     winProbability: function(target, opponent, includeRandomFactor = true) {
-        const RANDOM_FACTOR = 10; // in percents
+        const RANDOM_FACTOR = 11; // in percents
         const FORM_DIVISOR = 200;
 
         const randomAddition = !includeRandomFactor ? 0 : (this.randomRange(-RANDOM_FACTOR, RANDOM_FACTOR * 2)) / 100;
         const targetBaseProbability = this.fibaDifferenceProbability(target, opponent);
         const formDifference = (allTeams[target].form.average - allTeams[opponent].form.average) / FORM_DIVISOR;
-        
-        //console.log(randomAddition)
-        //console.log(`RA: ${randomAddition} | TBP: ${targetBaseProbability} | FD: ${formDifference}`)
 
         return this.clamp(0, (targetBaseProbability + formDifference + randomAddition), 1);
     },
 
     adjustTeamFormByMatch: function (target, team2, targetPoints, team2Points, includeForm = false) {
         let team1Odds = 0.5 + (includeForm ? this.winProbability(target, team2, false) : this.fibaDifferenceProbability(target, team2));
-        //let team2Odds = includeForm ? this.winProbability(team2, target, false) : this.fibaDifferenceProbability(team2, target);
 
         let targetTeam = allTeams[target];
         let diff = (targetPoints - team2Points) * team1Odds;
@@ -137,7 +82,7 @@ const Utils = {
      */
     playMatch: function(team1, team2) {
         const DISPARITY_FACTOR = 65;
-        const DISPARITY_MULTIPLIER = 1 + (Utils.randomRange(-(DISPARITY_FACTOR), (DISPARITY_FACTOR) * 2) / 100);
+        const DISPARITY_MULTIPLIER = 1 + (Utils.randomRange(-(DISPARITY_FACTOR * 0.75), (DISPARITY_FACTOR) * 2) / 100);
 
         const team1Odds = this.winProbability(team1, team2);
         const team2Odds = this.winProbability(team2, team1);
@@ -207,6 +152,68 @@ const parseTeamsAndForm = () => {
 
 }
 
+/**
+ * Directly modifies `groups` object. Sorts according to points, then breaks up all ties in points according to `head-to-head` and `mini-league` rules
+ */
+const breakTies = (skipSort = false) => {
+    for (let key in groups) {
+        let group = groups[key];
+
+        group.sort((a, b) => allTeams[b.ISOCode].stats.points - allTeams[a.ISOCode].stats.points);
+
+        let tied = null, si = null;
+
+        for (let i = 1, cur = allTeams[group[0].ISOCode].stats.points; i < group.length; i++) {
+            let team = allTeams[group[i].ISOCode];
+
+            if (team.stats.points === cur) {
+                if (!tied) {
+                    tied = 1;
+                    si = i - 1;
+                };
+                tied++;
+            } else {
+                cur = team.stats.points;
+            }
+        }
+
+        if (!tied) continue;
+        hasTies = true;
+
+        if (tied === 2) {
+            let team1 = allTeams[group[2].ISOCode];
+            let headToHead = team1.matches[group[3].ISOCode];
+            if (headToHead.opponent > headToHead.target) {
+                [group[2], group[3]] = [group[3], group[2]]
+            }
+        } else {
+            let participants = (group.slice(si, si + tied)).map(i => i.ISOCode);
+            let miniLeague = [];
+
+            for (let i in participants) {
+                miniLeague[i] = [participants[i], 0];
+            }
+
+            for (let i = 0; i < participants.length - 1; i++) {
+                for (let j = i + 1; j < participants.length; j++) {
+                    let match = allTeams[miniLeague[i][0]]?.matches[miniLeague[j][0]];
+                    let iwin = match?.target > match?.opponent;
+
+                    miniLeague[i][1] += (1 + (+iwin));
+                    miniLeague[j][1] += (1 + (+!iwin));
+                }
+            }
+
+            miniLeague.sort((a,b) => b[1] - a[1]);
+
+            for (let i = si, j = 0; i < si + 3; i++, j++) {
+                let ind = group.findIndex(o => o.ISOCode === miniLeague[j][0]);
+                [group[i], group[ind]] = [group[ind], group[i]];
+            }
+        }
+    }
+}
+
 const groupPhase = () => {
     let output = "";
 
@@ -250,13 +257,6 @@ const groupPhase = () => {
                 team1.matches[team2ISO] = {target: result.team1, opponent: result.team2};
                 team2.matches[team1ISO] = {target: result.team2, opponent: result.team1};
 
-                // "+" is there to convert it into a number. 
-                // ">>" truncates the number. 
-                // typically, about 35% of points scored in a basketball game are three-pointers. to adjust for realism im making it a random percentage from 20 to 45. this can further be adjusted by looking at team 
-                // statistics to figure out how likely it is for them to score three-pointers
-                // let t1Scores = Utils.calculateScores(+result.team1, Utils.randomRange(20, 45) >> 0);
-                // let t2Scores = Utils.calculateScores(+result.team2, Utils.randomRange(20, 45) >> 0);
-
                 team1.stats.scoresAchieved += (+result.team1);
                 team2.stats.scoresAchieved += (+result.team2);
                 
@@ -288,7 +288,7 @@ const groupPhase = () => {
     }
 
     console.log(output + "\n");
-    Utils.breakTies();
+    breakTies();
 
 
     let final = "Konačan plasman u grupama:\n";
@@ -299,7 +299,6 @@ const groupPhase = () => {
 
         for (let ind in groups[group]) {
             let team = groups[group][ind];
-            //console.log(allTeams[team.ISOCode])
             let stats = allTeams[team.ISOCode].stats;
 
             final += INDENTATION.repeat(2) + (+ind + 1) + ". " + (team.Team.padEnd(20, " ")) + stats.wins + " / " + stats.losses + " / " + stats.points + " / " + stats.scoresAchieved + " / " + stats.scoresTaken + " / " + (stats.pointDifference) + "\n"
@@ -459,16 +458,11 @@ const finals = (teams) => {
         INDENTATION + "3. " + medals[2].name + "\n"
     )
 
-    
-    //console.log(semiMatchups)
-
 }
 
 const main = () => {
     parseTeamsAndForm();
-    console.log(allTeams)
     groupPhase();
-    // * decideHats also logs
     let hats = decideHats();
     finals(hats);
 };
