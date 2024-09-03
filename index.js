@@ -35,7 +35,7 @@ const Utils = {
      * @returns 
      */
     fibaDifferenceProbability: function(target, opponent) {
-        let FIBA_DIFFERENCE_DIVISOR = 105;
+        let FIBA_DIFFERENCE_DIVISOR = 87;
 
         if (allTeams[target] && allTeams[opponent]) {
             return 0.5 + ((allTeams[opponent].FIBA - allTeams[target].FIBA) / FIBA_DIFFERENCE_DIVISOR);
@@ -52,8 +52,8 @@ const Utils = {
      * @returns 
      */
     winProbability: function(target, opponent, includeRandomFactor = true) {
-        const RANDOM_FACTOR = 11; // in percents
-        const FORM_DIVISOR = 200;
+        const RANDOM_FACTOR = 21; // in percents
+        const FORM_DIVISOR = 180;
 
         const randomAddition = !includeRandomFactor ? 0 : (this.randomRange(-RANDOM_FACTOR, RANDOM_FACTOR * 2)) / 100;
         const targetBaseProbability = this.fibaDifferenceProbability(target, opponent);
@@ -81,7 +81,7 @@ const Utils = {
      * @returns {} {team1, team2}
      */
     playMatch: function(team1, team2) {
-        const DISPARITY_FACTOR = 65;
+        const DISPARITY_FACTOR = 72;
         const DISPARITY_MULTIPLIER = 1 + (Utils.randomRange(-(DISPARITY_FACTOR * 0.75), (DISPARITY_FACTOR) * 2) / 100);
 
         const team1Odds = this.winProbability(team1, team2);
